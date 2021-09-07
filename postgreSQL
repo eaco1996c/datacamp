@@ -1,0 +1,308 @@
+-- Chapter 1. Overview of Common Data Types
+
+
+-- Get the column name and data type
+SELECT
+ 	column_name, 
+    data_type
+-- From the system database information schema
+FROM INFORMATION_SCHEMA.COLUMNS 
+-- For the customer table
+WHERE table_name = 'customer';
+
+
+
+SELECT
+ 	-- Select the rental and return dates
+	rental_date,
+	return_date,
+ 	-- Calculate the expected_return_date
+	rental_date + INTERVAL '3 days' AS expected_return_date
+FROM rental;
+
+
+
+-- Select the title and special features column 
+SELECT 
+  title, 
+  special_features 
+FROM film
+-- Use the array index of the special_features column
+WHERE special_features[2] = 'Deleted Scenes';
+
+
+SELECT
+  title, 
+  special_features 
+FROM film 
+-- Modify the query to use the ANY function 
+WHERE 'Trailers' = ANY(special_features);
+
+
+SELECT 
+  title, 
+  special_features 
+FROM film 
+-- Filter where special_features contains 'Deleted Scenes'
+WHERE special_features @> ARRAY['Deleted Scenes'];
+
+-- Chapter 2. Working with DATE/TIME Functions and Operators
+
+
+SELECT f.title, f.rental_duration,
+    -- Calculate the number of days rented
+	AGE(r.return_date, r.rental_date) AS days_rented
+FROM film AS f
+	INNER JOIN inventory AS i ON f.film_id = i.film_id
+	INNER JOIN rental AS r ON i.inventory_id = r.inventory_id
+ORDER BY f.title;
+
+
+SELECT
+	f.title,
+ 	-- Convert the rental_duration to an interval
+    INTERVAL '1' day * f.rental_duration,
+ 	-- Calculate the days rented as we did previously
+    r.return_date - r.rental_date AS days_rented
+FROM film AS f
+    INNER JOIN inventory AS i ON f.film_id = i.film_id
+    INNER JOIN rental AS r ON i.inventory_id = r.inventory_id
+-- Filter the query to exclude outstanding rentals
+WHERE r.return_date IS NOT NULL
+ORDER BY f.title;
+
+
+SELECT
+    f.title,
+	r.rental_date,
+    f.rental_duration,
+    -- Add the rental duration to the rental date
+    INTERVAL '1' day * f.rental_duration + r.rental_date AS expected_return_date,
+    r.return_date
+FROM film AS f
+    INNER JOIN inventory AS i ON f.film_id = i.film_id
+    INNER JOIN rental AS r ON i.inventory_id = r.inventory_id
+ORDER BY f.title;
+
+
+-- Extract day of week from rental_date
+SELECT 
+  EXTRACT(dow FROM rental_date) AS dayofweek, 
+  -- Count the number of rentals
+  COUNT(*) as rentals 
+FROM rental 
+GROUP BY 1;
+
+
+
+SELECT 
+  DATE_TRUNC('day', rental_date) AS rental_day,
+  -- Count total number of rentals 
+  count(*) AS rentals 
+FROM rental
+GROUP BY 1;
+
+
+SELECT 
+  c.first_name || ' ' || c.last_name AS customer_name,
+  f.title,
+  r.rental_date,
+  -- Extract the day of week date part from the rental_date
+  EXTRACT(dow FROM r.rental_date) AS dayofweek,
+  AGE(r.return_date, r.rental_date) AS rental_days,
+  -- Use DATE_TRUNC to get days from the AGE function
+  CASE WHEN DATE_TRUNC('day', AGE(r.return_date, r.rental_date)) > 
+  -- Calculate number of d
+    f.rental_duration * INTERVAL '1' day 
+  THEN TRUE 
+  ELSE FALSE END AS past_due 
+FROM 
+  film AS f 
+  INNER JOIN inventory AS i 
+  	ON f.film_id = i.film_id 
+  INNER JOIN rental AS r 
+  	ON i.inventory_id = r.inventory_id 
+  INNER JOIN customer AS c 
+  	ON c.customer_id = r.customer_id 
+WHERE 
+  -- Use an INTERVAL for the upper bound of the rental_date 
+  r.rental_date BETWEEN CAST('2005-05-01' AS DATE) 
+  AND CAST('2005-05-01' AS DATE) + INTERVAL '90 day';
+  
+  
+  -- Chapter 3. Parsing and Manipulating Text
+  
+  
+  -- Concatenate the first_name and last_name and email
+SELECT CONCAT(first_name,' ', last_name,' <' ,  email,'>') AS full_email 
+FROM customer
+
+
+SELECT 
+  -- Concatenate the category name to coverted to uppercase
+  -- to the film title converted to title case
+  UPPER(c.name)  || ': ' || INITCAP(f.title) AS film_category, 
+  -- Convert the description column to lowercase
+  LOWER(f.description) AS description
+FROM 
+  film AS f 
+  INNER JOIN film_category AS fc 
+  	ON f.film_id = fc.film_id 
+  INNER JOIN category AS c 
+  	ON fc.category_id = c.category_id;
+    
+    
+ SELECT 
+  -- Select the title and description columns
+  title,
+  description,
+  -- Determine the length of the description column
+  length(description) AS desc_len
+FROM film;
+
+
+SELECT 
+  -- Select the first 50 characters of description
+  left(description, 50) AS short_desc
+FROM 
+  film AS f; 
+  
+  
+  
+  SELECT 
+  -- Select only the street name from the address table
+  substring(address from position(' ' in address)+1 FOR length(address))
+FROM 
+  address;
+  
+  
+  SELECT
+  -- Extract the characters to the left of the '@'
+  Substring(email From 0 For POSITION('@' IN email)) AS username,
+  -- Extract the characters to the right of the '@'
+  substring(email FROM POSITION('@' IN email)+1 for Length(email)) AS domain
+FROM customer;
+
+
+-- Concatenate the first_name and last_name 
+SELECT 
+	rpad(first_name, LENGTH(first_name)+1) 
+    || rpad(last_name, LENGTH(last_name)+2, ' <') 
+    || rpad(email, LENGTH(email)+1, '>') AS full_email
+FROM customer; 
+
+
+-- Concatenate the uppercase category name and film title
+SELECT 
+  Concat(upper(c.name), ': ', f.title) AS film_category, 
+  -- Truncate the description remove trailing whitespace
+  trim(left(description, 50)) AS film_desc
+FROM 
+  film AS f 
+  INNER JOIN film_category AS fc 
+  	ON f.film_id = fc.film_id 
+  INNER JOIN category AS c 
+  	ON fc.category_id = c.category_id;
+    
+    
+ SELECT 
+  UPPER(c.name) || ': ' || f.title AS film_category, 
+  -- Truncate the description without cutting off a word
+  LEFT(description, 50 - 
+    -- Subtract the position of the first whitespace character
+    position(
+      ' ' IN REVERSE(LEFT(description, 50))
+    )
+  ) 
+FROM 
+  film AS f 
+  INNER JOIN film_category AS fc 
+  	ON f.film_id = fc.film_id 
+  INNER JOIN category AS c 
+  	ON fc.category_id = c.category_id;
+    
+    
+    
+ -- Chapter 4. Full-text Search and PostgresSQL Extensions
+ 
+ -- Select the film description as a tsvector
+SELECT to_tsvector(description)
+FROM film;
+
+
+-- Select the title and description
+SELECT title, description
+FROM film
+-- Convert the title to a tsvector and match it against the tsquery 
+WHERE to_tsvector(title) @@ to_tsquery('elf');
+
+
+-- Create an enumerated data type, compass_position
+CREATE TYPE compass_position AS ENUM (
+  	-- Use the four cardinal directions
+  	'North', 
+  	'South',
+  	'East', 
+  	'West'
+);
+-- Confirm the new data type is in the pg_type system table
+SELECT typname, typcategory
+FROM pg_type
+WHERE typname='compass_position';
+
+
+
+SELECT *
+FROM pg_type 
+WHERE typname='mpaa_rating';
+
+-- Select the film title and inventory ids
+SELECT 
+	f.title, 
+    i.inventory_id,
+    -- Determine whether the inventory is held by a customer
+    inventory_held_by_customer(i.inventory_id) as held_by_cust
+FROM film as f 
+	INNER JOIN inventory AS i ON f.film_id=i.film_id 
+WHERE
+	-- Only include results where the held_by_cust is not null
+    inventory_held_by_customer(i.inventory_id) is not null
+    
+    
+ -- Select the title and description columns
+SELECT 
+  title, 
+  description, 
+  -- Calculate the similarity
+  similarity(title, description)
+FROM 
+  film
+  
+  
+ -- Select the title and description columns
+SELECT  
+  title, 
+  description, 
+  -- Calculate the levenshtein distance
+  levenshtein(title, 'JET NEIGHBOR') AS distance
+FROM 
+  film
+ORDER BY 3
+
+
+SELECT 
+  title, 
+  description, 
+  -- Calculate the similarity
+  similarity(description, 'Astounding Drama')
+FROM 
+  film 
+WHERE 
+  to_tsvector(description) @@ 
+  to_tsquery('Astounding & Drama') 
+ORDER BY 
+	similarity(title, description) DESC;
+  
+  
+  
+  
